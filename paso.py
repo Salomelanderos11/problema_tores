@@ -1,31 +1,5 @@
 import numpy as np
 
-# ==========================================
-# PASO 1: CONSTRUIR EL "MUNDO" Y LAS REGLAS
-# ==========================================
-
-# 1. Límites geográficos de la ciudad (Nuestro plano de 100x100)
-X_MIN, X_MAX = 0, 100  
-Y_MIN, Y_MAX = 0, 100  
-
-# 2. Restricciones técnicas de la empresa de telecomunicaciones
-N_MAX = 10     # Presupuesto máximo: 10 torres permitidas en total
-R_MAX = 20     # Límite técnico: Ninguna torre puede emitir señal a más de 20 de radio
-
-# 3. Las "Reglas del Juego" (Pesos de la función objetivo)
-# Con esto le diremos a las partículas qué es bueno y qué es malo
-W_COB = 1.0     # PREMIO: 1 punto por cada metro cuadrado con señal
-W_COSTO = 0.5   # CASTIGO: Te restamos 0.5 puntos por lo que cueste la antena
-W_SOLAP = 0.8   # CASTIGO: Te restamos 0.8 puntos si dos antenas cubren la misma calle
-W_FUERA = 1000  # MULTA: Te quitamos 1000 puntos si pones una antena fuera de la ciudad
-
-# 4. El "Escáner" (Nuestra malla virtual para calcular áreas con NumPy puro)
-# Dividimos el mapa de 100x100 en 10,000 puntitos (píxeles). 
-RESOLUCION = 100
-x_line = np.linspace(X_MIN, X_MAX, RESOLUCION)
-y_line = np.linspace(Y_MIN, Y_MAX, RESOLUCION)
-X_GRID, Y_GRID = np.meshgrid(x_line, y_line)
-AREA_POR_PUNTO = ((X_MAX - X_MIN) / RESOLUCION) * ((Y_MAX - Y_MIN) / RESOLUCION)
 #limites del mapa
 
 x_min=0

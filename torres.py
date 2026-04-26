@@ -14,6 +14,7 @@ W_COB = 1.0
 W_COSTO = 0.5   
 W_SOLAP = 0.8   
 W_FUERA = 1000  
+MAX_PORCENTAJE_SOLAPAMIENTO = 15.0  # Límite estricto de solapamiento
 
 # Malla virtual para el cálculo vectorial con NumPy
 RESOLUCION = 100
@@ -46,6 +47,12 @@ def calcular_fitness(vector_individuo):
 
     area_cubierta = np.sum(mapa_cobertura >= 1) * AREA_POR_PUNTO
     solapamiento = np.sum(np.maximum(0, mapa_cobertura - 1)) * AREA_POR_PUNTO
+
+    # Restricción estricta de porcentaje
+    if area_cubierta > 0:
+        porcentaje_solapamiento = (solapamiento / area_cubierta) * 100
+        if porcentaje_solapamiento > MAX_PORCENTAJE_SOLAPAMIENTO:
+            penalizacion_frontera += W_FUERA
 
     return (W_COB * area_cubierta) - (W_COSTO * costo_total) - (W_SOLAP * solapamiento) - penalizacion_frontera
 
@@ -166,16 +173,158 @@ def optimizacion_gwo(num_lobos, iteraciones):
             
             D_alfa = np.abs(C[0] * alfa_pos - posiciones[i])
             X1 = alfa_pos - A[0] * D_alfa
-            
             D_beta = np.abs(C[1] * beta_pos - posiciones[i])
             X2 = beta_pos - A[1] * D_beta
-            
             D_delta = np.abs(C[2] * delta_pos - posiciones[i])
             X3 = delta_pos - A[2] * D_delta
 
             posiciones[i] = (X1 + X2 + X3) / 3.0
             
     return alfa_pos, alfa_score
+
+# --- ARTIFICIAL BEE COLONY (ABC) ---
+def optimizacion_abc(tam_pob, iteraciones):
+    dim = N_MAX * 3
+    limite_estancamiento = 20 # Si una fuente de néctar no mejora en 20 turnos, se abandona.
+    
+    posiciones = np.random.uniform(low=0, high=100, size=(tam_pob, dim))
+    for i in range(tam_pob): posiciones[i, 2::3] = np.random.uniform(0, R_MAX, N_MAX)
+    
+    fitness = np.array([calcular_fitness(p) for p in posiciones])
+    intentos = np.zeros(tam_pob) # Contador de estancamiento
+    
+    mejor_posicion = np.copy(posiciones[np.argmax(fitness)])
+    mejor_fitness = np.max(fitness)
+
+    for it in range(iteraciones):
+        # 1. Abejas Empleadas: Modifican levemente la solución actual
+        for i in range(tam_pob):
+            vecino_k = np.random.choice([x for x in range(tam_pob) if x != i])
+            v = np.copy(posiciones[i])
+            # Seleccionamos una torre al azar para modificar (X, Y y Radio)
+            torre_t = np.random.randint(N_MAX)
+            phi = np.random.uniform(-1, 1, 3) 
+            
+            # Ecuación de movimiento ABC
+            v[torre_t*3 : torre_t*3+3] += phi * (posiciones[i, torre_t*3 : torre_t*3+3] - posiciones[vecino_k, torre_t*3 : torre_t*3+3])
+            
+            # Reparar límites
+            v[torre_t*3]   = np.clip(v[torre_t*3], X_MIN, X_MAX)
+            v[torre_t*3+1] = np.clip(v[torre_t*3+1], Y_MIN, Y_MAX)
+            v[torre_t*3+2] = np.clip(v[torre_t*3+2], 0, R_MAX)
+            
+            fit_v = calcular_fitness(v)
+            if fit_v > fitness[i]:
+                posiciones[i] = v
+                fitness[i] = fit_v
+                intentos[i] = 0 # Resetea el estancamiento
+            else:
+                intentos[i] += 1
+                
+        # 2. Abejas Observadoras: Van a las mejores soluciones
+        # Convertimos fitness en probabilidades (Ruleta)
+        fit_norm = fitness - np.min(fitness) + 1e-6 
+        probabilidades = fit_norm / np.sum(fit_norm)
+        
+        for _ in range(tam_pob):
+            i = np.random.choice(tam_pob, p=probabilidades)
+            vecino_k = np.random.choice([x for x in range(tam_pob) if x != i])
+            v = np.copy(posiciones[i])
+            torre_t = np.random.randint(N_MAX)
+            phi = np.random.uniform(-1, 1, 3)
+            
+            v[torre_t*3 : torre_t*3+3] += phi * (posiciones[i, torre_t*3 : torre_t*3+3] - posiciones[vecino_k, torre_t*3 : torre_t*3+3])
+            
+            v[torre_t*3]   = np.clip(v[torre_t*3], X_MIN, X_MAX)
+            v[torre_t*3+1] = np.clip(v[torre_t*3+1], Y_MIN, Y_MAX)
+            v[torre_t*3+2] = np.clip(v[torre_t*3+2], 0, R_MAX)
+            
+            fit_v = calcular_fitness(v)
+            if fit_v > fitness[i]:
+                posiciones[i] = v
+                fitness[i] = fit_v
+                intentos[i] = 0
+            else:
+                intentos[i] += 1
+
+        # Actualizar la mejor solución global
+        if np.max(fitness) > mejor_fitness:
+            mejor_fitness = np.max(fitness)
+            mejor_posicion = np.copy(posiciones[np.argmax(fitness)])
+
+        # 3. Abejas Exploradoras: Si una solución se estanca, generar una nueva al azar
+        for i in range(tam_pob):
+            if intentos[i] > limite_estancamiento:
+                posiciones[i] = np.random.uniform(0, 100, dim)
+                posiciones[i, 2::3] = np.random.uniform(0, R_MAX, N_MAX)
+                fitness[i] = calcular_fitness(posiciones[i])
+                intentos[i] = 0
+
+    return mejor_posicion, mejor_fitness
+
+# --- ARTIFICIAL IMMUNE SYSTEM (AIS) ---
+def optimizacion_ais(tam_pob, iteraciones):
+    dim = N_MAX * 3
+    # Reducimos la población inicial para compensar la explosión de clones y mantener tiempos justos
+    pob_base = max(10, tam_pob // 3) 
+    num_clones = 3
+    
+    anticuerpos = np.random.uniform(low=0, high=100, size=(pob_base, dim))
+    for i in range(pob_base): anticuerpos[i, 2::3] = np.random.uniform(0, R_MAX, N_MAX)
+    
+    mejor_anticuerpo = None
+    mejor_afinidad = -float('inf')
+
+    for it in range(iteraciones):
+        afinidades = np.array([calcular_fitness(a) for a in anticuerpos])
+        
+        # Ordenar anticuerpos de mejor a peor (Selección)
+        indices_ordenados = np.argsort(afinidades)[::-1]
+        anticuerpos = anticuerpos[indices_ordenados]
+        afinidades = afinidades[indices_ordenados]
+        
+        if afinidades[0] > mejor_afinidad:
+            mejor_afinidad = afinidades[0]
+            mejor_anticuerpo = np.copy(anticuerpos[0])
+            
+        nuevos_anticuerpos = []
+        
+        # Clonación e Hipermutación
+        for i in range(pob_base):
+            # Tasa de mutación inversamente proporcional al rango. El mejor muta poco, el peor muta mucho.
+            tasa_mutacion = (i + 1) / pob_base 
+            
+            for _ in range(num_clones):
+                clon = np.copy(anticuerpos[i])
+                
+                # Mutación Gaussiana
+                if np.random.rand() < 0.8: # 80% de probabilidad de que el clon mute
+                    clon[0::3] += np.random.normal(0, 10 * tasa_mutacion, N_MAX) # Mutar X
+                    clon[1::3] += np.random.normal(0, 10 * tasa_mutacion, N_MAX) # Mutar Y
+                    clon[2::3] += np.random.normal(0, 3 * tasa_mutacion, N_MAX)  # Mutar Radio
+                    
+                # Reparar fenotipo
+                for j in range(N_MAX):
+                    clon[j*3]   = np.clip(clon[j*3], X_MIN, X_MAX)
+                    clon[j*3+1] = np.clip(clon[j*3+1], Y_MIN, Y_MAX)
+                    clon[j*3+2] = np.clip(clon[j*3+2], 0, R_MAX)
+                    
+                nuevos_anticuerpos.append(clon)
+                
+        # Evaluar todos los clones y seleccionar los mejores 'pob_base' para sobrevivir
+        afinidades_clones = np.array([calcular_fitness(c) for c in nuevos_anticuerpos])
+        mejores_indices = np.argsort(afinidades_clones)[::-1][:pob_base]
+        
+        anticuerpos = np.array(nuevos_anticuerpos)[mejores_indices]
+        
+        # Edición del receptor: Matar al 20% de los peores anticuerpos y reemplazarlos con aleatorios nuevos
+        num_reemplazos = int(pob_base * 0.2)
+        if num_reemplazos > 0:
+            nuevos_aleatorios = np.random.uniform(0, 100, (num_reemplazos, dim))
+            for i in range(num_reemplazos): nuevos_aleatorios[i, 2::3] = np.random.uniform(0, R_MAX, N_MAX)
+            anticuerpos[-num_reemplazos:] = nuevos_aleatorios
+
+    return mejor_anticuerpo, mejor_afinidad
 
 # ==========================================
 # 4. INTERFAZ DE CONSOLA Y REPORTES
@@ -211,24 +360,25 @@ def menu_principal():
     iter_defecto = 50
     
     while True:
-        # limpiar_pantalla() # Descomenta esto si prefieres que se limpie la terminal
-        print("\n" + "#"*50)
-        print(" SISTEMA DE OPTIMIZACIÓN DE TORRES ".center(50, " "))
-        print("#"*50)
+        print("\n" + "#"*55)
+        print(" SISTEMA DE OPTIMIZACIÓN BIOINSPIRADA DE TORRES ".center(55, " "))
+        print("#"*55)
         print("1. Ejecutar PSO (Enjambre de Partículas)")
         print("2. Ejecutar GA  (Algoritmo Genético)")
         print("3. Ejecutar GWO (Lobos Grises)")
-        print("4. MODO COMPETENCIA (Ejecutar los 3 y comparar)")
-        print("5. Salir")
-        print("#"*50)
+        print("4. Ejecutar ABC (Colonia de Abejas)")
+        print("5. Ejecutar AIS (Sistema Inmune Artificial)")
+        print("6. MODO COMPETENCIA (Ejecutar los 5 y comparar)")
+        print("7. Salir")
+        print("#"*55)
         
-        opcion = input("Selecciona una opción (1-5): ")
+        opcion = input("Selecciona una opción (1-7): ")
         
-        if opcion == '5':
+        if opcion == '7':
             print("Saliendo del sistema...")
             break
             
-        if opcion in ['1', '2', '3']:
+        if opcion in ['1', '2', '3', '4', '5']:
             print(f"\nCalculando con {pob_defecto} individuos y {iter_defecto} iteraciones. Por favor espera...")
             inicio = time.time()
             
@@ -241,34 +391,40 @@ def menu_principal():
             elif opcion == '3':
                 vec, fit = optimizacion_gwo(pob_defecto, iter_defecto)
                 nombre = "Grey Wolf Optimizer (GWO)"
+            elif opcion == '4':
+                vec, fit = optimizacion_abc(pob_defecto, iter_defecto)
+                nombre = "Artificial Bee Colony (ABC)"
+            elif opcion == '5':
+                vec, fit = optimizacion_ais(pob_defecto, iter_defecto)
+                nombre = "Artificial Immune System (AIS)"
                 
             tiempo = time.time() - inicio
             imprimir_reporte(vec, fit, tiempo, nombre)
             input("Presiona ENTER para continuar...")
             
-        elif opcion == '4':
-            print(f"\nIniciando competencia ({pob_defecto} ind / {iter_defecto} iter)...")
+        elif opcion == '6':
+            print(f"\nIniciando gran competencia ({pob_defecto} ind / {iter_defecto} iter)...")
             
-            t_pso = time.time()
-            vec_pso, fit_pso = optimizacion_pso(pob_defecto, iter_defecto)
-            t_pso = time.time() - t_pso
+            resultados = []
+            algoritmos = [
+                ("PSO", optimizacion_pso),
+                ("GA", optimizacion_genetica),
+                ("GWO", optimizacion_gwo),
+                ("ABC", optimizacion_abc),
+                ("AIS", optimizacion_ais)
+            ]
             
-            t_ga = time.time()
-            vec_ga, fit_ga = optimizacion_genetica(pob_defecto, iter_defecto)
-            t_ga = time.time() - t_ga
-            
-            t_gwo = time.time()
-            vec_gwo, fit_gwo = optimizacion_gwo(pob_defecto, iter_defecto)
-            t_gwo = time.time() - t_gwo
+            for nombre, funcion in algoritmos:
+                t_inicio = time.time()
+                vec, fit = funcion(pob_defecto, iter_defecto)
+                t_fin = time.time() - t_inicio
+                resultados.append((nombre, fit, t_fin))
+                print(f"[{nombre}] finalizado en {t_fin:.2f}s")
             
             print("\n" + "="*50)
             print(" TABLA DE POSICIONES FINAL ")
             print("="*50)
-            resultados = [
-                ("PSO", fit_pso, t_pso),
-                ("GA", fit_ga, t_ga),
-                ("GWO", fit_gwo, t_gwo)
-            ]
+            
             # Ordenar de mayor a menor fitness
             resultados.sort(key=lambda x: x[1], reverse=True)
             
