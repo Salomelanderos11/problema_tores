@@ -138,7 +138,7 @@ def optimizacion_pso(n,iters):
     gbest = pbest[np.argmax(pfit)].copy()
     gfit = np.max(pfit)
 
-    for _ in range(iters):
+    for ite in range(iters):
 
         for i in range(n):
 
@@ -187,7 +187,7 @@ def optimizacion_genetica(n,iters):
     mejor = None
     mejor_fit = -1e9
 
-    for _ in range(iters):
+    for ite in range(iters):
 
         fit = np.array([calcular_fitness(p) for p in pob])
 
@@ -269,7 +269,7 @@ def optimizacion_abc(n,iters):
     mejor=pos[np.argmax(fit)].copy()
     mejor_fit=np.max(fit)
 
-    for _ in range(iters):
+    for ite in range(iters):
 
         for i in range(n):
 
@@ -317,7 +317,7 @@ def optimizacion_ais(n,iters):
     mejor=anticuerpos[0].copy()
     mejor_fit=calcular_fitness(mejor)
 
-    for _ in range(iters):
+    for ite in range(iters):
 
         fit=np.array(
         [calcular_fitness(a)
@@ -339,7 +339,7 @@ def optimizacion_ais(n,iters):
 
             tasa=(i+1)/base
 
-            for _ in range(3):
+            for ite in range(3):
 
                 clon=anticuerpos[i].copy()
 
@@ -389,7 +389,7 @@ def evaluar_algoritmo(func,nombre,reps,n,iters):
 
     for i in range(reps):
 
-        _,f=func(n,iters)
+        ite,f=func(n,iters)
 
         resultados.append(f)
 
@@ -414,7 +414,7 @@ def graficar(resultados,nombre):
 
     plt.figure(figsize=(10,6))
 
-    conteos,bins,_=plt.hist(resultados,bins=12,edgecolor="black")
+    conteos,bins,ite=plt.hist(resultados,bins=12,edgecolor="black")
 
     x=np.linspace(min(resultados),max(resultados),300)
     ancho=bins[1]-bins[0]
