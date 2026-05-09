@@ -191,11 +191,11 @@ def optimizacion_genetica(n,iters):
 
         fit = np.array([calcular_fitness(p) for p in pob])
 
-        idx = np.argmax(fit)
+        ind_best = np.argmax(fit)
 
-        if fit[idx] > mejor_fit:
-            mejor_fit = fit[idx]
-            mejor = pob[idx].copy()
+        if fit[ind_best] > mejor_fit:
+            mejor_fit = fit[ind_best]
+            mejor = pob[ind_best].copy()
 
         nueva = np.zeros_like(pob)
         nueva[0] = mejor.copy()

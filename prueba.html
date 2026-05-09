@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validador de CSV</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+        .container { max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 8px; }
+        input, button { margin-top: 10px; display: block; width: 100%; padding: 10px; }
+        button { background-color: #28a745; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button:hover { background-color: #218838; }
+        #resultado { margin-top: 20px; white-space: pre-wrap; font-family: monospace; font-size: 0.9em; }
+        .error { color: #dc3545; }
+        .exito { color: #28a745; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Analizador de Caracteres Especiales</h2>
+    <p>Sube un archivo CSV para buscar caracteres no permitidos (solo se permiten letras, números, @, _ y -).</p>
+    
+    <input type="file" id="csvFile" accept=".csv">
+    <button onclick="procesarCSV()">Analizar Archivo</button>
+
+    <div id="resultado"></div>
+</div>
+
+<script>
+function procesarCSV() {
+    const input = document.getElementById('csvFile');
+    const resultadoDiv = document.getElementById('resultado');
+    
+    // Limpiar resultados previos
+    resultadoDiv.innerHTML = "";
+
+    if (input.files.length === 0) {
+        alert("Por favor, selecciona un archivo primero.");
+        return;
+    }
+
+    const archivo = input.files[0];
+    const lector = new FileReader();
+
+    lector.onload = function(e) {
+        const contenido = e.target.result;
+        const lineas = contenido.split(/\r?\n/);
+        let erroresEncontrados = [];
+
+        // EXPRESIÓN REGULAR:
+        // [^...] significa "cualquier cosa que NO sea lo siguiente"
+        // a-zA-Z0-9: Letras y números
+        // @_ \-: Los caracteres que tú permites
+        // \s: Espacios, tabulaciones
+        const regexPermitidos = /[^a-zA-Z0-9.@_\-\s,]/g;
+
+        lineas.forEach((linea, indexFila) => {
+            // Buscamos si la línea tiene caracteres prohibidos
+            const coincidencias = linea.match(regexPermitidos);
+            
+            if (coincidencias) {
+                // Guardamos el error con el número de fila (index + 1)
+                erroresEncontrados.push(`Fila ${indexFila + 1}: Caracteres no permitidos detectados -> ${coincidencias.join(' ')}`);
+            }
+        });
+
+        if (erroresEncontrados.length > 0) {
+            resultadoDiv.innerHTML = `<span class="error">Se encontraron problemas:</span>\n\n` + erroresEncontrados.join('\n');
+        } else {
+            resultadoDiv.innerHTML = `<span class="exito">¡Archivo limpio! No se detectaron caracteres especiales prohibidos.</span>`;
+        }
+    };
+
+    lector.readAsText(archivo);
+}
+</script>
+
+</body>
+</html>
