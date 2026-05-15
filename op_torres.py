@@ -219,39 +219,65 @@ def optimizacion_genetica(n,iters):
 # -----------------------------------------
 # GWO
 # -----------------------------------------
-
-def optimizacion_gwo(n,iters):
-
-    dim = max_torres*3
-
+def optimizacion_gwo(n, iters):
+    dim = max_torres * 3
     pos = crear_poblacion(n)
-
-    alfa = pos[0].copy()
-    mejor = calcular_fitness(alfa)
+    alfa_pos, alfa_fit = None, -1e9
+    beta_pos, beta_fit = None, -1e9
+    delta_pos, delta_fit = None, -1e9
 
     for it in range(iters):
 
         for i in range(n):
-            f=calcular_fitness(pos[i])
-            if f>mejor:
-                mejor=f
-                alfa=pos[i].copy()
+            fit = calcular_fitness(pos[i])
+            
+            if fit > alfa_fit:
 
-        a = 2-(2*it/iters)
+                delta_fit, delta_pos = beta_fit, beta_pos.copy() if beta_pos is not None else None
+                beta_fit, beta_pos = alfa_fit, alfa_pos.copy() if alfa_pos is not None else None
+                alfa_fit, alfa_pos = fit, pos[i].copy()
+            elif fit > beta_fit:
+                delta_fit, delta_pos = beta_fit, beta_pos.copy() if beta_pos is not None else None
+                beta_fit, beta_pos = fit, pos[i].copy()
+            elif fit > delta_fit:
+                delta_fit, delta_pos = fit, pos[i].copy()
 
+        
+        a = 2 - (2 * it / iters)
+
+        # actualizar posicion de todos los lobos
         for i in range(n):
-            for d in range(dim):
+            
+            r1, r2 = np.random.rand(dim), np.random.rand(dim)
+            
+            # calculo respecto al alfa
+            A1 = 2 * a * r1 - a
+            C1 = 2 * r2
+            D_alfa = abs(C1 * alfa_pos - pos[i])
+            X1 = alfa_pos - A1 * D_alfa
 
-                r1,r2 = np.random.rand(),np.random.rand()
 
-                A=2*a*r1-a
-                C=2*r2
+            r1, r2 = np.random.rand(dim), np.random.rand(dim)
+            A2 = 2 * a * r1 - a
+            C2 = 2 * r2
+            D_beta = abs(C2 * beta_pos - pos[i])
+            X2 = beta_pos - A2 * D_beta
 
-                D=abs(C*alfa[d]-pos[i,d])
+            r1, r2 = np.random.rand(dim), np.random.rand(dim)
+            A3 = 2 * a * r1 - a
+            C3 = 2 * r2
+            D_delta = abs(C3 * delta_pos - pos[i])
+            X3 = delta_pos - A3 * D_delta
 
-                pos[i,d]=alfa[d]-A*D
+            pos[i] = (X1 + X2 + X3) / 3
 
-    return alfa,mejor
+            # aplicar limites 
+            for j in range(max_torres):
+                pos[i, j*3]   = np.clip(pos[i, j*3], x_min, x_max)
+                pos[i, j*3+1] = np.clip(pos[i, j*3+1], y_min, y_max)
+                pos[i, j*3+2] = np.clip(pos[i, j*3+2], 0, radio_max)
+
+    return alfa_pos, alfa_fit
 
 
 # -----------------------------------------
